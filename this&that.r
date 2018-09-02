@@ -41,3 +41,10 @@ tosentence <- function(s, split=NA) {
 		}))
 	return(s)
 }
+
+
+# strip out any empty rows from a df
+
+strip_empty_rows <- function(df) {
+  df %>% filter(rowSums(is.na(.)) != ncol(.))
+}

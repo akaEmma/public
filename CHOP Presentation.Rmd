@@ -1,0 +1,639 @@
+---
+title: "Finding Order in the Universe"
+author: "Sheila Braun"
+date: "August 31, 2018"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+shhh <- suppressPackageStartupMessages # It's a library - so shhh!
+shhhh <- suppressMessages
+shhhhh <- suppressWarnings
+options(decimal = 3, scipen = 1)
+shhh(library(tidyverse))
+shhh(library(ggthemes))
+shhh(library(Hmisc)) #describe()
+shhh(library(labelled)) #for loading the data
+source("this&that.r") # Handy functions for this project
+# my data directory
+dir <- "./data/"
+# Full data filename
+fname <- paste0(dir, "immunization_data_2016.csv")
+outname <- paste0(dir, "immunization_data_2016.rds")
+workfile <- paste0(dir, "workfile.rds")  # the workfile
+
+```
+
+##The Data##
+
+There is a lot of public data out there. I found an interesting data set at the Centers for Disease Control and Prevention National Immunization Surveys of 2016. It is a public-use data file and documentation that you can find at https://www.cdc.gov/vaccines/imz-managers/nis/datasets.html. I downloaded this set on August 30th, 2018. 
+
+You can find the exact data file on my public data gitub repo here: https://github.com/akaEmma/public_data/blob/master/immunization_data_2016.zip. It will extract to a .csv file rather than to a flat delimited text file, which is what it is on the NIS site. So you can choose which format you prefer. 
+
+###Extract Data###
+
+If you downloaded your file from the NIS site, then use their R code to load it. You can find the code at https://ftp.cdc.gov/pub/Vaccines_NIS/NISPUF16.R or on my public repo at https://github.com/akaEmma/public/blob/master/NISPUF16.R.
+
+If you downloaded your file from my public data github repo, then you will probably want to use my code here to load the file. The data are in a very large file, so I decided to use the tidyverse package to speed up processing. That meant making a few changes to NIS's code. I have included that edited code in the steps outlined here. 
+
+####1. Set up standard value labels.####
+
+Before even loading the data file, we put value labels into memory for use when we make certain variables into factor variables. Since the NIS put everything in capitals and I find them unreadable in tables and plots, I've added code here to make sentence case labels using the non-standard function `tosentence`, which isn't, like `tolower` and `toupper`, readily available in R. I found it on http://rcourse.rupertoverall.net/Extras.R. Thanks, Rupert!
+
+```{r value_labels}
+
+############################################################################
+# CREATE FORMATS                                                 
+############################################################################
+
+AGEGRPlevels = c("1", "2", "3")
+AGEGRPlabels = tosentence(c("19 - 23 MONTHS", "24 - 29 MONTHS", "30 - 35 MONTHS"))
+
+LANGUAGElevels = c("1", "2", "3")
+LANGUAGElabels = tosentence(c("ENGLISH", "SPANISH", "OTHER"))
+
+YNDKRFlevels = c("1", "2", "77", "99")
+YNDKRFlabels = tosentence(c("YES", "NO", "DON'T KNOW", "REFUSED"))
+
+SHOTCOUNlevels = c("77","88", "99")
+SHOTCOUNlabels = tosentence(c("DON'T KNOW", "1+ BUT UNKNOWN NUMBER", "REFUSED"))
+
+YNlevels = c("1", "2")
+YNlabels = tosentence(c("YES", "NO"))
+
+Ylevels = c("1")
+Ylabels = tosentence(c("YES"))
+
+CHILDNMlevels = c("1", "2", "3", "77", "99")
+CHILDNMlabels = tosentence(c("ONE", "TWO OR THREE", "FOUR OR MORE", "DON'T KNOW", "REFUSED"))
+
+CWIClevels = c("1", "2", "3", "77", "99")
+CWIClabels = tosentence(c("YES", "NO", "NEVER HEARD OF WIC", "DON'T KNOW", "REFUSED"))
+
+EDUC1_levels = c("1", "2", "3", "4", "77", "99")
+EDUC1_labels = tosentence(c("< 12 YEARS", "12 YEARS", "> 12 YEARS, NON-COLLEGE GRAD", "COLLEGE GRAD", "DON'T KNOW", "REFUSED"))
+
+HISPlevels = c("1", "2", "3", "4", "5")
+HISPlabels = tosentence(c("HISPANIC", "NON-HISPANIC", "OTHER", "DON'T KNOW", "REFUSED"))
+
+MOBILlevels = c("1", "2", "77", "99")
+MOBILlabels = tosentence(c("MOVED FROM DIFFERENT STATE", "DID NOT MOVE FROM DIFFERENT STATE", "DON'T KNOW", "REFUSED"))
+
+SEXlevels = c("1", "2", "77", "99")
+SEXlabels = tosentence(c("MALE", "FEMALE", "DON'T KNOW", "REFUSED"))
+
+INCPOVlevels = c("1", "2", "3", "4")
+INCPOVlabels = tosentence(c("ABOVE POVERTY, > $75K", "ABOVE POVERTY, < =  $75K", "BELOW POVERTY", "UNKNOWN"))
+
+HASPDA2Flevels = c("1", "2")
+HASPDA2Flabels = tosentence(c("CHILD HAS ADEQUATE PROVIDER DATA OR ZERO VACCINATIONS", "CHILD DOES NOT HAVE ADEQUATE PROVIDER DATA"))
+
+PROVIDlevels = c("1", "2", "3", "4", "5", "6", "7")
+PROVIDlabels = tosentence(c("ALL PUBLIC FACILITIES", "ALL HOSPITAL FACILITIES", "ALL PRIVATE FACILITIES", "ALL MILITARY/OTHER FACILITIES", "MIXED", "TYPE OF PROVIDER UNKNOWN", "ALL WIC CLINIC PROVIDERS"))
+
+REGISTRYlevels = c("1", "2", "3", "4")
+REGISTRYlabels = tosentence(c("ALL PROVIDERS", "SOME BUT POSSIBLY OR DEFINITELY NOT ALL PROVIDERS", "NO PROVIDERS", "UNKNOWN/DON'T KNOW"))
+
+TYPElevels = c("","01","02","03","04","05","07","08","1L","1M","1N","20","21","22","30","31","32","33","43","44","60","70","71","72","73","74","BC","D3","DH","DK","FL","FM","FN","FO","H2","HA","HB","HG","HI","HM","HS","HY","MA","MB","MM","MP","NC","OT","RB", "RG","RM","RO","TY","UN","VA","VM","VO","YF")
+TYPElabels = tosentence(c("MISSING", "DT", "DTP", "DTP-UNKNOWN", "DTAP", "DTP-HIB", "DTAP-HIB", "DTAP-HEPB-IPV", "H1N1 FLU-UNKNOWN", "H1N1 FLU SPRAY", "H1N1 FLU INJECTED", "OPV", "IPV", "POLIO-UNKNOWN", "MMR", "MEASLES ONLY", "MEASLES-MUMPS", "MEASLES-RUBELLA", "HEPB-HIB", "HIB ONLY-UNKNOWN", "HEPB ONLY", "PCV CONJUGATE-UNKNOWN", "PCV POLYSACCHARIDE", "PCV-UNKNOWN", "PCV CONJUGATE-7", "PCV CONJUGATE-13", "BCG (TUBERCULOSIS)", "DTAP-IPV-HIB", "DTP-HEPB", "DON'T KNOW", "SEASONAL FLU-UNKNOWN", "SEASONAL FLU SPRAY", "SEASONAL FLU INJECTED", "FOUR-IN-ONE", "HIB (SANOFI OR GLAXOSMITHKLINE)", "HEPA", "HEPB-UNKNOWN", "HIB (GLAXOSMITHKLINE)", "HIB-UNKNOWN", "HIB (MERCK)", "HIB (SANOFI)", "HIB-MENCY", "MALARIA", "MUMPS-RUBELLA", "MCV-UNKNOWN", "MUMPS", "NEVER CODABLE", "OTHER", "RUBELLA", "ROTARIX (GSK)", "ROTATEQ (MERCK)", "ROTAVIRUS-UNKNOWN", "TYPHOID", "UNCODABLE", "VARICELLA-UNKNOWN", "MMR-VARICELLA", "VARICELLA-ONLY", "YELLOW FEVER"))
+
+HEPBRTlevels = c("1", "2")
+HEPBRTlabels = tosentence(c("AT LEAST ONE PROVIDER CHECKED GIVEN AT BIRTH", "NO PROVIDERS CHECKED GIVEN AT BIRTH"))
+
+HEPFLGlevels = c("1", "2")
+HEPFLGlabels = tosentence(c("HEPB BIRTH SHOT DATE IMPUTED FROM SHOTCARD", "HEPB BIRTH SHOT DATE IMPUTED FROM DISTRIBUTION OF BIRTH DOSE DATES"))
+
+UTDlevels = c("0", "1")
+UTDlabels = tosentence(c("NOT UTD", "UTD"))
+
+CENREGlevels = c("1", "2", "3", "4")
+CENREGlabels = tosentence(c("NORTHEAST", "MIDWEST", "SOUTH", "WEST"))
+
+
+STATElevels = c("1", "10", "11", "12", "13", "15", "16", "17", "18", "19", "2", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "4", "40", "41", "42", "44", "45", "46", "47", "48", "49", "5", "50", "51", "53", "54", "55", "56", "6", "66", "72", "78", "8", "9")
+STATElabels = tosentence(c("ALABAMA", "DELAWARE", "DISTRICT OF COLUMBIA", "FLORIDA", "GEORGIA", "HAWAII", "IDAHO", "ILLINOIS", "INDIANA", "IOWA", "ALASKA", "KANSAS", "KENTUCKY", "LOUISIANA", "MAINE", "MARYLAND", "MASSACHUSETTS", "MICHIGAN", "MINNESOTA", "MISSISSIPPI", "MISSOURI", "MONTANA", "NEBRASKA", "NEVADA", "NEW HAMPSHIRE", "NEW JERSEY", "NEW MEXICO", "NEW YORK", "NORTH CAROLINA", "NORTH DAKOTA", "OHIO", "ARIZONA", "OKLAHOMA", "OREGON", "PENNSYLVANIA", "RHODE ISLAND", "SOUTH CAROLINA", "SOUTH DAKOTA", "TENNESSEE", "TEXAS", "UTAH", "ARKANSAS", "VERMONT", "VIRGINIA", "WASHINGTON", "WEST VIRGINIA", "WISCONSIN", "WYOMING", "CALIFORNIA", "GUAM", "PUERTO RICO", "U.S. VIRGIN ISLANDS", "COLORADO", "CONNECTICUT"))
+
+RACE_PUFlevels = c("1", "2", "3")
+RACE_PUFlabels = tosentence(c("WHITE ONLY", "BLACK ONLY", "OTHER + MULTIPLE RACE"))
+
+AGECPOXRlevels = c("1", "2", "3", "4")
+AGECPOXRlabels = tosentence(c("0 TO 6 MONTHS OLD", "7 TO 12 MONTHS OLD", "13 TO 18 MONTHS OLD", "19+ MONTHS OLD"))
+
+C1Rlevels = c("1", "2", "3", "4", "5", "6", "7", "8")
+C1Rlabels = tosentence(c("1", "2", "3", "4", "5", "6", "7", "8+"))
+
+C5Rlevels = c("1", "2", "3", "4", "77", "99")
+C5Rlabels = tosentence(c("MOTHER (STEP, FOSTER, ADOPTIVE) OR FEMALE GUARDIAN", "FATHER (STEP, FOSTER, ADOPTIVE) OR MALE GUARDIAN", "GRANDPARENT", "OTHER FAMILY MEMBER/FRIEND", "DON'T KNOW", "REFUSED"))
+
+INCQ298Alevels = c("10", "11", "12", "13", "14", "3", "4", "5", "6", "7", "77", "8", "9", "99")
+INCQ298Alabels = tosentence(c("$35001 - $40000", "$40001 - $50000", "$50001 - $60000", "$60001 - $75000", "$75001+", "$0 - $7500", "$7501 - $10000", "$10001 - $17500", "$17501 - $20000", "$20001 - $25000", "DON'T KNOW", "$25001 - $30000", "$30001 - $35000", "REFUSED"))
+
+RACEETHKlevels = c("1", "2", "3", "4")
+RACEETHKlabels = tosentence(c("HISPANIC", "NON-HISPANIC WHITE ONLY", "NON-HISPANIC BLACK ONLY", "NON-HISPANIC OTHER + MULTIPLE RACE"))
+
+D6Rlevels = c("0", "1", "2", "3")
+D6Rlabels = tosentence(c("0", "1", "2", "3+"))
+
+FRSTBRNlevels = c("1", "2", "77", "99")
+FRSTBRNlabels = tosentence(c("NO", "YES", "DON'T KNOW", "REFUSED"))
+
+BFFORM08Flevels = c("888")
+BFFORM08Flabels = tosentence(c("NEVER FED FORMULA"))
+
+RENTOWNlevels = c("1", "2", "3", "77", "99")
+RENTOWNlabels = tosentence(c("OWNED OR BEING BOUGHT", "RENTED", "OTHER ARRANGMENT", "DON'T KNOW", "REFUSED"))
+
+NUM_PHONlevels = c("1", "2", "3", "4", "77", "99")
+NUM_PHONlabels = tosentence(c("ONE", "TWO", "THREE OR MORE", "NONE", "DON'T KNOW", "REFUSED"))
+
+MAR_PUF2_levels = c("1", "2")
+MAR_PUF2_labels = tosentence(c("MARRIED", "NEVER MARRIED/WIDOWED/DIVORCED/SEPARATED/DECEASED/LIVING WITH PARTNER"))
+
+UTDPCVBlevels = c("1", "2", "3")
+UTDPCVBlabels = tosentence(c("4+ PCV7 PLUS 1+ PCV13", "4+ PCV7, NO FOLLOWING PCV13, WITH TYPE OF ALL VACCINES (IF ANY) FOLLOWING THE 4 PCV7 KNOWN", "ALL OTHERS WITH ADEQUATE PROVIDER DATA"))
+
+ESTGRANTlevels = c("1", "10", "11", "12", "13", "14", "16", "17", "18", "19", "2", "20", "22", "25", "27", "28", "29", "30", "31", "34", "35", "36", "38", "4", "40", "41", "44", "46", "47", "49", "5", "50", "51", "54", "55", "56", "57", "58", "59", "6", "60", "61", "62", "63", "64", "65", "66", "68", "7", "72", "73", "74", "75", "76", "77", "8")
+ESTGRANTlabels = c("CT", "NY-Rest of State", "NY-City of New York", "DC", "DE", "MD", "PA-Rest of State", "PA-Philadelphia County", "VA", "WV", "MA", "AL", "FL", "GA", "KY", "MS", "NC", "SC", "TN", "IL-Rest of State", "IL-City of Chicato", "IN", "MI", "ME", "MN", "OH", "WI", "AR", "LA", "NM", "NH", "OK", "TX-Rest of State", "TX-City of Houston", "TX-Bexar County", "IA", "KS", "MO", "NE", "RI", "CO", "MT", "ND", "SD", "UT", "WY", "AZ", "CA", "VT", "HI", "NV", "AK", "ID", "OR", "WA", "NJ")
+
+INS_STAT_Ilevels = c("1", "2", "3", "4")
+INS_STAT_Ilabels = tosentence(c("PRIVATE INSURANCE", "ANY MEDICAID", "OTHER INSURANCE", "UNINSURED"))
+
+INS_BREAK_Ilevels = c("1", "2", "3", "4")
+INS_BREAK_Ilabels = tosentence(c("CURRENTLY INSURED BUT UNINSURED AT SOME POINT SINCE AGE 11", "CURRENTLY INSURED AND NEVER UNINSURED SINCE AGE 11", "CURRENTLY UNINSURED BUT INSURED AT SOME POINT SINCE AGE 11", "CURRENTLY UNINSURED AND NEVER INSURED SINCE AGE 11"))
+
+
+ESTIAP16Flevels = c("1", "10", "105", "106", "11", "12", "13", "14", "16", "17", "18", "19", "2", "20", "22", "25", "27", "28", "29", "30", "31", "34", "35", "36", "38", "4", "40", "41", "44", "46", "47", "49", "5", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "6", "60", "61", "62", "63", "64", "65", "66", "68", "7", "72", "73", "74", "75", "76", "77", "8", "95")
+
+ESTIAP16Flabels = c("CT", "NY-Rest of State", "Guam", "Puerto Rico", "NY-City of New York", "DC", "DE", "MD", "PA-Rest of State", "PA-Philadelphia County", "VA", "WV", "MA", "AL", "FL", "GA", "KY", "MS", "NC", "SC", "TN", "IL-Rest of State",
+"IL-CITY OF CHICAGO", "IN", "MI", "ME", "MN", "OH", "WI", "AR", "LA", "NM", "NH", "OK", "TX-Rest of State", "TX-Dallas County", "TX-El Paso County", "TX-City of Houston", "TX-Bexar County", "IA", "KS", "MO", "NE", "RI", "CO", "MT", "ND", "SD", "UT", "WY", "AZ", "CA", "VT", "HI", "NV", "AK", "ID", "OR", "WA", "NJ", "US Virgin Islands")
+
+MAGEGRP2_levels = c("1", "2", "77", "99")
+MAGEGRP2_labels = tosentence(c("< =  29 YEARS", "> =  30 YEARS", "DON'T KNOW", "REFUSED"))
+```
+
+####2. Read raw data into memory.####
+
+Now read in the raw data from the .csv file.
+
+```{r read_raw_data}
+
+df <- read_csv(fname)
+
+```
+
+This file has `r nrow(df)` individual cases (children) and `r ncol(df)` variables (or features, or columns). 
+
+####3. Change some integer variables to character variables so they can become factors.####
+
+The code for this is in my public repo at https://github.com/akaEmma/public/blob/master/format_char_vars.r. Feel free to download all the *.r* files you find there for this project. You might need them sooner or later. 
+
+```{r int_to_char}
+source("format_char_vars.r")
+df <- format_char_vars(df)
+```
+
+Still `r nrow(df)` rows and `r ncol(df)` columns. 
+
+####4. Create a permanent dataset.####
+
+I like saving to the R data structure because it keeps track of attributes. It remembers if you have turned variables into factors, for instance.
+
+
+```{r create_permanent_dataset}
+write_rds(df, outname)
+```
+
+####5. Create factors and change names to lowercase.####
+
+The code for this is in my public repo at https://github.com/akaEmma/public/blob/master/assign_factor_vars.r. 
+
+Note that I did not make the two first columns, the child and household IDs, into factor variables. There are too many of them to create factors using the `tidyverse` package. If it becomes necessary to use them, we can take a sample instead of using the whole file so there is a manageable number.
+
+```{r create_factors}
+source("assign_factor_vars.r")
+df <- assign_factor_vars(df)
+#take a look at the file
+df
+```
+
+`df` should be a tibble with 28,296 rows (children) and 455 columns (variables). If it is, save it. If it isn't, email me at akaEmma@gmail.com and together we can figure out why.
+
+```{r safety_save}
+write_rds(df, workfile)
+```
+
+####6. Whittle the file down a bit.####
+
+That's the end of the help we'll get from NIS's lovely little load program. The rest is original code specific to our context: that of researchers looking for interesting projects based on public vaccine data.
+
+There are certain actions you can usually perform to shrink a large file. We will do them here. 
+
+First, there is a variable in the file, `pdat`, that indicates whether the case has enough data to be used in the analysis. Let's use that to screen the data.
+
+```{r select_only_adequate_cases}
+#filter out only those marked by NIS as having adequate data
+df <- filter(df, PDAT == "Child has adequate provider data or zero vaccinations")
+```
+
+Now there are `r nrow(df)` cases but still `r ncol(df)` variables. Save it again.
+
+```{r ss2}
+write_rds(df, workfile)
+```
+
+Omit empty columns. We don't need variables cluttering up the database that have no information in them. 
+
+```{r omit_empty_columns}
+df <- Filter(function(x)!all(is.na(x)), df)
+```
+
+Now there are only `r nrow(df)` and `r ncol(df)` columns. 
+
+Look at the pattern of missing values. We want to know if there are any empty rows (blank cases) or, for that matter, any complete cases. I David Arenburg's code in my project toolbox which is https://github.com/akaEmma/public/blob/master/this%26that.r. Or you can just write it. It's pretty simple code. 
+
+```{r check_empties_and_fulls}
+missing_tot <- sum(is.na(df))
+complete_tot <- sum(complete.cases(df))
+
+# make a quick & useful function to get a logical vector we need
+row_has_na <- apply(df, 1, function(x){any(is.na(x))})
+has_na_tot <- sum(row_has_na)
+
+# strip out any completely empty rows.
+old_num_rows <- nrow(df)
+df <- strip_empty_rows(df)
+new_num_rows <- nrow(df)
+```
+
+There are a total of `r missing_tot` rows with all missing values. There are `r complete_tot` complete cases. The file has `r has_na_tot` cases with at least one missing value. Subtract them from the dataset and there would be only `r nrow(df) - has_na_tot` cases. We can't just drop cases with *any* missing values. `strip_empty_rows` stripped out exactly `r old_num_rows - new_num_rows`. 
+
+Getting rid of empty rows might be a good idea in a lot of datasets, but this one doesn't have any empty rows and it doesn't have any complete rows, either. We can't whittle it down any further that way.
+
+Save the file again.
+
+```{r ss3}
+write_rds(df, workfile)
+```
+
+####Delete Constants####
+
+In this case, we are not interested in constants, or variables that have the exact same value--or nearly the same--for every person. There is a function that identifies these variables in the `caret` package. 
+
+```{r delete_zero_variance}
+shhh(library(caret))
+#Check for nuisances with 0 variance and return their names.
+delete_these <- nearZeroVar(df, names = TRUE)
+delete_these
+```
+
+Most of those look pretty useless: we don't, for instance, need to know how many landlines they have in their home, especially if the number is the same for almost everybody. We also know that `PDAT` is a constant because we turned it into one. Furthermore, a name like `xfluty7`, which captures those who have had the 7th in a series of vaccines, has very low numbers. But I want to check a few of the variables to be sure. The `Hmisc` package has a good function called `describe()`. I'm also using my own tool, `get_these_vars()`, which is in my toolbox and on my github repo, as mentioned above. 
+
+```{r check_a_few}
+shhh(library(Hmisc))
+check_vars <- get_these_vars(df, delete_these)
+describe(check_vars)
+```
+
+We can keep `had_cpox` because it's got enough cases for a small study and it is interesting. `xfluty1`, `xfluty2` and `xfluty3` look okay, just a bit low (comparatively) on numbers. They might be useful to somebody, though. The `xpcvty` variables all look good except for `xpcvty7`. `xrotty3` is okay, but `xrotty5` is not.
+
+Checking the ones that `describe()` missed:
+
+```{r check_more}
+sum(is.na(df$BF_FORMR08))
+table(df$BF_FORMR08)
+describe(df$BF_FORMR08)
+#etc.
+```
+
+`bf_formr08` is, sadly, of no use because only those who were never fed formula have values in the variable. All the others are NA; perhaps those who were fed formula are recorded as NA, but the actual NAs were also recorded that way. We can't use the variable. So we modify `delete_these` and reduce the number of variables in the data set again.
+
+```{r modify_delete_these}
+delete_these <- toupper(c("pdat", #easier to type in lowercase and fix after
+                  "year", 
+                  "bf_formr08", 
+                  "bfendfl06", 
+                  "num_phone", 
+                  "d7", #because it's consent 
+                  "p_utdpcvb13", 
+                  "dflu7", 
+                  "dhelpb7", 
+                  "dhib7", 
+                  "dpcv7", 
+                  "drot5",
+                  "flu7_age", 
+                  "hep7_age", 
+                  "hib7_age", 
+                  "pcv7_age", 
+                  "rot5_age", 
+                  "xfluty7", 
+                  "xhepty6",
+                  "xhepty7",
+                  "xhibty7",
+                  "xpcvty7", 
+                  "xrotty5",
+                  "provwt_d", #we won't use the weight vars this time
+                  "provwt_d_terr"))
+df <- delete_vars(df, delete_these)
+```
+
+Now there are `r ncol(df)` variables and `r nrow(df)` rows. 
+
+Save it.
+
+```{r ss5}
+write_rds(df, workfile)
+```
+
+###Collapse Vaccine Variables to One Variable per Type###
+
+If we collapse the various vaccines from, for instance, seven hepatitis vaccine variables to one hepatitis variable with value 1 - 7 (depending on how many hepatitis vaccines the child had) then we can eliminate a number of variables. `collapse_vaccines` is in `this&that.r`.
+
+```{r collapse_vaccines}
+df <- df %>% collapse_vaccines() # collapse vaccination visits into vaccine type
+```
+    
+###Data Reduction: Principal Components Analysis###
+
+If this were a small dataset, we could just look at the variables one by one and make decisions. But since there are still `r ncol(df)` variables left, we need to identify the most important ones using some kind of short cut method. To do that, we use principal components analysis, or PCA to reduce the number of dimensions. In this setting a dimension is simply a variable and we want to figure out which ones make a difference.
+
+```{r principal_components_analysis}
+shhh(library(FactoMineR)) #PCA()
+shhh(library(factoextra)) #fviz_eig() and others; visualize pca
+
+df <- read_rds(workfile)
+
+factor_names <- get_factor_names(df) # in "this&that.r"
+number_names <- get_number_names(df) # in "this&that.r"
+factor_i <- get_factor_i(df, factor_names) # in "this&that.r": get indices
+
+df <- df[, c(factor_names, number_names)] #get rid of IDs for this next bit.
+
+dfpca <- df %>%
+    PCA(scale.unit = TRUE,
+        quali.sup = factor_i,
+        graph = T)
+
+df <- read_rds(workfile) #get the IDs back
+
+fviz_pca_var(dfpca, col.var = "contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"))
+
+res <- dimdesc(dfpca)
+head(res$Dim.1$quanti)
+head(res$Dim.1$quali)
+
+#visualizations
+# 
+fviz_eig(dfpca)
+# get_pca_var(dfpca)
+# get_pca_ind(dfpca)
+#fviz_pca_ind(dfpca) too many cases to see much.
+fviz_pca_var(dfpca)
+fviz_pca_biplot(dfpca)
+fviz_cos2(dfpca, choice = "var", axes = 1:2)
+fviz_pca_var(dfpca, alpha.var = "cos2")
+head(dfpca$var$contrib, 40)
+
+```
+##Simplifying the Data in Response to PCA##
+
+Too many subjects, too many variables. We can use the PCA to identify variables that are on similar dimensions and collapse them together. We can group variables by type of vaccine or by age or by variable grouping based on the information in  *National Immunization Survey-Child: A User’s Guide for the 2016
+Public-Use Data File* that is available to the public at  https://www.cdc.gov/vaccines/imz-managers/nis/downloads/NIS-PUF16-DUG.pdf. 
+
+After examining the PCA output carefully and the user's guide for the data file, I believe it makes sense to break the data up into separate sets thus for the purpose of this analysis:
+
+* IDs, demographics, and ages of vaccines (`dfages`) 
+* IDs, demographics, and vaccine types (`dfvacs`)
+* demographics and a simple integer variable for how many vaccines the child has had (`dfdems`)
+
+We are not interested in a time series analysis for this study; if we were, then we would make a more complex plan. 
+
+###Idenfity the Demographic Variables###
+
+First figure out which variables are demographic. The list and the routine called here are in `this&that.r`.
+
+```{r id_dems}
+dem_names <- get_dem_names(df) # in "this&that.r", specific to this project
+```
+
+
+###Eliminate Categories of Variables that Won't be Used###
+
+This is a researcher decision: we won't use the type of vaccine drug information and we are more interested in the child data than the provider data. We can eliminate those two categories. 
+
+```{r eliminate_two categories}
+providers <- indf(df, "^p_")
+drugs <- indf(df, "^x")
+more_providers <- indf(df, "^pu")
+df <- df %>% select(-one_of(c(providers, drugs, more_providers)))
+write_rds(df, workfile)
+```
+
+There are now `r ncol(df)` variables.
+
+We are also less interested in the ages of the vaccines then in whether or how many vaccines they had. Including both categories could create some covariance issues. Get rid of the age variables, then. 
+
+```{r eliminate_ages}
+ages <- indf(df, "age$")
+df <- df %>% select(-one_of(ages))
+write_rds(df, workfile)
+```
+
+Now there are only `r ncol(df)` variables, which is starting to look manageable for a small but important research project.
+
+According to the data dictionary, `raceethk` was recoded from `race_k`. We can eliminate `race_k`.
+
+```{r elim_race_k_wt}
+df <- df %>% select(-one_of("race_k"))
+df <- df %>% select(-one_of(wt_names, #ignore for now
+                                  inc_names #get rid of covariants
+                                  )) 
+write_rds(df, workfile)
+```
+
+##Correlations
+
+At this point, correlations can be helpful. The normal way to do correlations is to create matrix and have a look. We can do this only with the numeric variables. 
+
+```{r numeric_correlations}
+shhh(library(Hmisc))
+df <- read_rds(workfile)
+df$stratum <- as.factor(df$stratum)
+
+#create a df for the correlation
+
+#use only numeric variables and one factor variable.
+
+choose_dem <- function(df) {
+    shhh(library(fastDummies))
+
+    var_names <- c(get_number_names(df), "sex")
+    cordf <- df %>% select(one_of(var_names))
+    #create dummy variable for sex = female
+    cordf <- cordf %>% dummy_cols(select_columns = c("sex"),
+                                  remove_first_dummy = TRUE)
+    # get rid of the "sex" variable in favor of the new "sex_Male"
+    cordf <- cordf %>% select(-one_of(c("sex"))) 
+}
+
+#replace missing with means
+cordf[] <- lapply(cordf,
+                  function(x) ifelse(is.na(x),
+                                     mean(x, na.rm = TRUE),
+                                     x))
+# Now take a random sample. We don't need 15,000 cases to draw conclusions. If we build models we might keep all cases But not for now.
+# This function takes a fraction of the dataset.
+# it is part of the tidyverse package. 
+
+cordf <- sample_frac(cordf, replace = FALSE, size = .20)
+# this is still a respectable sample. 
+#check it
+cordf
+```
+
+###Correlation Matrices###
+
+Now run the correlations. The output is informative but not so easy to see.
+
+```{r correlations}
+#rcorr and a little cleanup
+mx <- rcorr(as.matrix(cordf))
+mx$P <- round(mx$P, 3) #round off to 3 digits
+mx$r <- round(mx$r, 3) #and again
+
+#save it
+write_rds(mx, "mx.rds")
+mx
+
+#plain cor
+# create and save for later.
+cordf <- read_rds("cordf.rds")
+mx2 <- cor(cordf) #save the matrix as a csv file
+write.csv(mx2, "./cor_matrix.csv")
+```
+
+Now we have two different types of objects, both of which contain correlation matrices. I have two types so I can plot them in different ways. 
+
+Certain vaccination types correlate entirely with each other (estimate = 1). Trim the matrix so such high correlations are left out. 
+
+```{r some_plots}
+shhh(library(corrplot))
+corrplot(as.matrix(mx2))
+
+```
+
+Understanding this plot:
+
+* The darker the circle, the stronger the correlation.    
+* If the square is blank, there is no significant correlation.    
+* The faded dots indicate that the correlations are weak but significant.    
+* Pink dots are negative correlations.
+
+So we see some interesting facts right away:
+
+* All of the vaccine types except `vrc` are perfectly correlated.     
+* Gender does not explain any of the variance in this data set. 
+* We don't need both `bf` variables.   
+
+Conclusions: 
+
+* We should move on to a different demographic variable and leave gender out.    
+* We can use `vrc` and any of the other vaccine types. We don't need the others. For no particular reason, let's use `polio` as a proxy for all the others.    
+* We can use either `bf` variable. For no particular reason, let's use the first one, `bfendr06`. 
+* Something interesting is going on with the `bf` variables and `incporar_i`. This may be an error. Perhaps `incporar_i` isn't a numeric variable after all. We need to check that. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+For now, we're interested in correlations with *p* values less than or equal to .20.
+
+```{r pvalues}
+mx <- mx %>% filter(p.value <= .20)
+mx <- mx %>% arrange(desc(p.value))
+mx
+```
+
+##Data Visualizations##
+
+Now we've done all we can with the numbers without having interesting visualizations to help us. It's time to play with pictures. 
+
+```{r corrplot}
+shhh(library(corrplot))
+corrplot(mx)
+
+```
+
+
+
+
+
+###Old Plots###
+
+
+
+
+
+
+
+###New Plot###
+
+Reference: A new visualization to beautifully explore correlations:
+Introducing the solar correlation map, and how to easily create your own. By Stefan Zapf and Christopher Kraushaar January 30, 2017. https://www.oreilly.com/learning/a-new-visualization-to-beautifully-explore-correlations September 2018.
+
+Zapf and Kraushaar wrote their lovely code in Python, so let's switch to a command line. 
+
+    pip install solar-correlation-map
+    python solar.py cor_matrix.csv sex_Male
+    python solar.py cor_matrix.csv polio
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
